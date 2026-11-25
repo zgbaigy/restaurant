@@ -1140,31 +1140,35 @@ async function loadAllDishes() {
     return list;
 }
 
-// 压缩图片并输出 Blob 与预览 dataURL
-function compressImage(file, maxSize = 600, quality = 0.82) {
+// 压缩图片并输出 Blob 与预览 dataURL（单次读取，避免异步后重复读取 File 失败）
+function compressImage(file, maxSize = 480, quality = 0.8) {
     return new Promise((resolve, reject) => {
         if (!file) { resolve({ blob: null, dataUrl: '' }); return; }
         const reader = new FileReader();
         reader.onload = (e) => {
             const img = new Image();
             img.onload = () => {
-                let w = img.width, h = img.height;
-                const scale = Math.min(1, maxSize / Math.max(w, h));
-                w = Math.round(w * scale);
-                h = Math.round(h * scale);
-                const canvas = document.createElement('canvas');
-                canvas.width = w;
-                canvas.height = h;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, w, h);
-                const dataUrl = canvas.toDataURL('image/jpeg', quality);
-                if (canvas.toBlob) {
-                    canvas.toBlob(blob => resolve({ blob, dataUrl }), 'image/jpeg', quality);
-                } else {
-                    resolve({ blob: null, dataUrl });
+                try {
+                    let w = img.width, h = img.height;
+                    const scale = Math.min(1, maxSize / Math.max(w, h));
+                    w = Math.max(1, Math.round(w * scale));
+                    h = Math.max(1, Math.round(h * scale));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    if (canvas.toBlob) {
+                        canvas.toBlob(blob => resolve({ blob, dataUrl }), 'image/jpeg', quality);
+                    } else {
+                        resolve({ blob: null, dataUrl });
+                    }
+                } catch (err) {
+                    reject(err);
                 }
             };
-            img.onerror = () => reject(new Error('图片加载失败'));
+            img.onerror = () => reject(new Error('图片解码失败，请使用 JPG/PNG/WebP 格式'));
             img.src = e.target.result;
         };
         reader.onerror = () => reject(new Error('文件读取失败'));
@@ -1172,27 +1176,39 @@ function compressImage(file, maxSize = 600, quality = 0.82) {
     });
 }
 
-// 优先上传至 CloudBase 云存储（数据库仅存 fileID，避免 base64 膨胀）；若云存储未开通权限则自动降级为压缩 base64
+// 优先尝试上传至 CloudBase 云存储并校验可读；若当前环境未开通云存储写入权限则直接使用内存中的压缩图片
 async function uploadDishImage(file) {
-    const { blob, dataUrl } = await compressImage(file, 600, 0.82);
+    const { blob, dataUrl } = await compressImage(file, 480, 0.8);
+    if (!dataUrl) throw new Error('图片为空');
+
     if (blob && app && typeof app.uploadFile === 'function') {
         try {
             const filename = 'dish_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.jpg';
-            const uploadFileObj = new File([blob], filename, { type: 'image/jpeg' });
-            const res = await app.uploadFile({
+            const uploadFileObj = typeof File === 'function'
+                ? new File([blob], filename, { type: 'image/jpeg' })
+                : blob;
+            const uploadPromise = app.uploadFile({
                 cloudPath: 'restaurant-dishes/' + filename,
                 filePath: uploadFileObj,
             });
-            if (res && res.fileID) {
-                cloudImgCache[res.fileID] = dataUrl;
-                return { imageUrl: res.fileID, previewUrl: dataUrl, isCloud: true };
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('云存储上传超时')), 6000)
+            );
+            const res = await Promise.race([uploadPromise, timeoutPromise]);
+            if (res && res.fileID && typeof app.getTempFileURL === 'function') {
+                const urlRes = await app.getTempFileURL({ fileList: [res.fileID] });
+                const item = urlRes && urlRes.fileList && urlRes.fileList[0];
+                const resolvedUrl = item && (item.tempFileURL || item.download_url);
+                if (resolvedUrl) {
+                    cloudImgCache[res.fileID] = resolvedUrl;
+                    return { imageUrl: res.fileID, previewUrl: resolvedUrl, isCloud: true };
+                }
             }
         } catch (err) {
             console.warn('云存储上传不可用，降级为压缩图片保存', err);
         }
     }
-    const fallback = await compressImage(file, 400, 0.78);
-    return { imageUrl: fallback.dataUrl, previewUrl: fallback.dataUrl, isCloud: false };
+    return { imageUrl: dataUrl, previewUrl: dataUrl, isCloud: false };
 }
 
 async function renderAdminDishes() {
@@ -1232,7 +1248,7 @@ async function renderAdminDishes() {
                 <input class="checkout-input" id="newDishDesc" placeholder="菜品描述（选填）" maxlength="50">
             </div>
             <div class="dish-form-row">
-                <label class="dish-img-upload" id="newDishImgLabel">
+                <label class="dish-img-upload" for="newDishImgFile" id="newDishImgLabel">
                     <img id="newDishImgPreview" src="${DISH_IMG}" alt="预览">
                     <span>点击选择菜品照片</span>
                 </label>
@@ -1262,7 +1278,7 @@ async function renderAdminDishes() {
                         <span class="custom-dish-qty-badge">${off ? '已下架' : '在售'}</span>
                     </div>
                     <div class="admin-order-actions">
-                        <button class="admin-btn admin-btn-cooking" data-act="chgimg" data-id="${d.id}"><i class="fa-solid fa-image"></i> 换图</button>
+                        <label class="admin-btn admin-btn-cooking" for="changeDishImgFile" data-act="chgimg" data-id="${d.id}"><i class="fa-solid fa-image"></i> 换图</label>
                         ${off
                             ? `<button class="admin-btn admin-btn-done" data-act="toggle" data-id="${d.id}" data-status="on"><i class="fa-solid fa-arrow-up"></i> 上架</button>`
                             : `<button class="admin-btn admin-btn-cooking" data-act="toggle" data-id="${d.id}" data-status="off"><i class="fa-solid fa-arrow-down"></i> 下架</button>`}
@@ -1270,7 +1286,7 @@ async function renderAdminDishes() {
                     </div>
                 </div>
             `;
-        }).join('') + `</div>`;
+        }).join('') + `</div><input type="file" id="changeDishImgFile" accept="image/*" style="display:none;">`;
     }
 
     el.innerHTML = html;
@@ -1284,23 +1300,24 @@ async function renderAdminDishes() {
         document.getElementById('newCategoryRow').style.display = (catSelect.value === '__new__') ? 'flex' : 'none';
     });
 
-    // 图片选择预览（优先上传至云存储，自动降级为压缩图片）
+    // 图片选择预览（使用原生 label[for] 触发，避免移动端/WebView 拦截）
     let newDishImageData = '';
     const imgFileInput = document.getElementById('newDishImgFile');
     const imgLabel = document.getElementById('newDishImgLabel');
     const imgPreview = document.getElementById('newDishImgPreview');
-    imgLabel?.addEventListener('click', () => imgFileInput.click());
+    imgLabel?.addEventListener('click', () => { if (imgFileInput) imgFileInput.value = ''; });
     imgFileInput?.addEventListener('change', async () => {
-        const file = imgFileInput.files[0];
+        const file = imgFileInput.files && imgFileInput.files[0];
         if (!file) return;
         try {
-            toast('图片上传中...');
+            toast('图片处理中...');
             const uploaded = await uploadDishImage(file);
             newDishImageData = uploaded.imageUrl;
             imgPreview.src = uploaded.previewUrl;
             toast(uploaded.isCloud ? '图片已上传至云存储' : '图片已处理完成');
         } catch (err) {
-            toast('图片处理失败');
+            console.error('新增菜品图片处理失败', err);
+            toast('图片处理失败：' + (err.message || '请换一张 JPG/PNG 图片'));
         }
     });
 
@@ -1355,9 +1372,21 @@ async function renderAdminDishes() {
         renderAdminDishes();
     });
 
-    // 菜品操作：换图 / 上架下架 / 删除
-    el.querySelectorAll('[data-act="chgimg"]').forEach(btn => {
-        btn.addEventListener('click', () => changeDishImage(btn.dataset.id));
+    // 菜品操作：换图（挂载在 DOM 中的原生 file input）/ 上架下架 / 删除
+    let pendingChangeDishId = null;
+    const changeImgInput = document.getElementById('changeDishImgFile');
+    el.querySelectorAll('[data-act="chgimg"]').forEach(label => {
+        label.addEventListener('click', () => {
+            pendingChangeDishId = label.dataset.id;
+            if (changeImgInput) changeImgInput.value = '';
+        });
+    });
+    changeImgInput?.addEventListener('change', async () => {
+        const file = changeImgInput.files && changeImgInput.files[0];
+        const targetId = pendingChangeDishId;
+        pendingChangeDishId = null;
+        if (!file || !targetId) return;
+        await applyDishImageChange(targetId, file);
     });
     el.querySelectorAll('[data-act="toggle"]').forEach(btn => {
         btn.addEventListener('click', () => toggleDishStatus(btn.dataset.id, btn.dataset.status));
@@ -1367,33 +1396,32 @@ async function renderAdminDishes() {
     });
 }
 
-// 更换菜品图片（优先上传至 CloudBase 云存储）
-function changeDishImage(id) {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = async () => {
-        const file = input.files[0];
-        if (!file) return;
-        try {
-            toast('图片上传中...');
-            const uploaded = await uploadDishImage(file);
-            const { error } = await db.from('restaurant_dishes')
-                .update({ image_url: uploaded.imageUrl })
-                .eq('id', Number(id));
-            if (error) {
-                console.error('更换图片失败', error);
-                toast('更换失败');
-                return;
-            }
-            dishesCache = [];
-            toast(uploaded.isCloud ? '图片已上传并更新' : '图片已更新');
-            renderAdminDishes();
-        } catch (err) {
-            toast('图片处理失败');
+// 更换菜品图片（使用挂载在 DOM 中的文件选择框 + 会话与结果校验）
+async function applyDishImageChange(id, file) {
+    try {
+        toast('图片处理中...');
+        const ok = await ensureSession();
+        if (!ok) {
+            toast('登录异常，请刷新重试');
+            return;
         }
-    };
-    input.click();
+        const uploaded = await uploadDishImage(file);
+        const { data, error } = await db.from('restaurant_dishes')
+            .update({ image_url: uploaded.imageUrl })
+            .eq('id', Number(id))
+            .select('id');
+        if (error || !data || data.length === 0) {
+            console.error('更换图片失败', error, data);
+            toast('更换失败，请重试');
+            return;
+        }
+        dishesCache = [];
+        toast(uploaded.isCloud ? '图片已上传并更新' : '图片已更新');
+        renderAdminDishes();
+    } catch (err) {
+        console.error('更换图片异常', err);
+        toast('图片处理失败：' + (err.message || '请换一张 JPG/PNG 图片'));
+    }
 }
 
 // 上架 / 下架菜品
