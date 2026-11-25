@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>张大厨的餐厅</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;700;900&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- 顶部导航 -->
+        <header class="topbar" id="topbar">
+            <button class="nav-back" id="navBack" aria-label="返回"><i class="fa-solid fa-chevron-left"></i></button>
+            <h1 class="topbar-title" id="topbarTitle">张大厨的餐厅</h1>
+            <button class="nav-cart" id="navCart" aria-label="购物车">
+                <i class="fa-solid fa-cart-shopping"></i>
+                <span class="cart-badge" id="cartBadge">0</span>
+            </button>
+        </header>
+
+        <!-- 页面容器 -->
+        <main class="page-container" id="pageContainer">
+            <!-- 首页 -->
+            <section class="page" id="page-home">
+                <div class="hero">
+                    <div class="hero-mark">
+                        <i class="fa-solid fa-utensils"></i>
+                    </div>
+                    <h2 class="hero-title">张大厨的餐厅</h2>
+                    <p class="hero-sub">家常好味 · 现点现做 · 暖胃暖心</p>
+                </div>
+                <div class="home-actions">
+                    <button class="btn btn-primary btn-lg" data-nav="menu">
+                        <i class="fa-solid fa-book-open"></i> 开始点餐
+                    </button>
+                    <button class="btn btn-outline btn-lg" data-nav="orders">
+                        <i class="fa-solid fa-clipboard-list"></i> 我的订单
+                    </button>
+                    <button class="btn btn-outline btn-lg" data-nav="completed">
+                        <i class="fa-solid fa-check-double"></i> 已完成菜品
+                    </button>
+                    <button class="btn btn-ghost btn-sm" data-nav="admin" id="adminEntryBtn">
+                        <i class="fa-solid fa-lock"></i> 张大厨入口
+                        <span class="admin-alert-badge" id="adminAlertBadge" style="display:none;"></span>
+                    </button>
+                </div>
+                <div class="home-tip">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>选好想吃的菜，张大厨就去做啦～</span>
+                </div>
+            </section>
+
+            <!-- 菜单页 -->
+            <section class="page" id="page-menu">
+                <div class="category-tabs-wrap" id="categoryTabsWrap">
+                    <div class="category-tabs" id="categoryTabs"></div>
+                </div>
+                <div class="dish-list" id="dishList"></div>
+            </section>
+
+            <!-- 菜品详情弹层 -->
+            <section class="page" id="page-dish">
+                <div class="dish-detail" id="dishDetail"></div>
+            </section>
+
+            <!-- 购物车页 -->
+            <section class="page" id="page-cart">
+                <div class="cart-content" id="cartContent"></div>
+                <div class="cart-footer" id="cartFooter"></div>
+            </section>
+
+            <!-- 提交订单页 -->
+            <section class="page" id="page-checkout">
+                <div class="checkout-content" id="checkoutContent"></div>
+            </section>
+
+            <!-- 订单列表页 -->
+            <section class="page" id="page-orders">
+                <div class="orders-content" id="ordersContent"></div>
+            </section>
+
+            <!-- 管理员页 -->
+            <section class="page" id="page-admin">
+                <div class="admin-content" id="adminContent"></div>
+            </section>
+
+            <!-- 已完成菜品页（顾客自定义菜品，同名合并统计） -->
+            <section class="page" id="page-completed">
+                <div class="completed-content" id="completedContent"></div>
+            </section>
+        </main>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="https://static.cloudbase.net/cloudbase-js-sdk/latest/cloudbase.full.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

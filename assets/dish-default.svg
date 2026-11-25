@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <!-- 背景圆 -->
+  <circle cx="100" cy="100" r="92" fill="#F6EBDD"/>
+  <!-- 餐盘 -->
+  <circle cx="100" cy="108" r="58" fill="#FFFFFF" stroke="#EADFD2" stroke-width="3"/>
+  <circle cx="100" cy="108" r="42" fill="#FFF9F2" stroke="#EADFD2" stroke-width="2"/>
+  <!-- 菜品主体（青椒炒鸡蛋配色：鸡蛋黄 + 青椒绿） -->
+  <ellipse cx="82" cy="104" rx="14" ry="10" fill="#F5C518"/>
+  <ellipse cx="116" cy="98" rx="13" ry="9" fill="#F5C518"/>
+  <ellipse cx="100" cy="118" rx="12" ry="8" fill="#F5C518"/>
+  <!-- 青椒块 -->
+  <path d="M76 92 q6 -10 16 -8 q4 8 -4 14 q-8 2 -12 -6z" fill="#3E9B4F"/>
+  <path d="M110 82 q7 -9 15 -6 q3 7 -5 12 q-7 2 -10 -6z" fill="#4CAF50"/>
+  <path d="M126 110 q8 -6 12 2 q-2 8 -10 8 q-6 -2 -2 -10z" fill="#3E9B4F"/>
+  <!-- 蒸汽 -->
+  <path d="M88 66 q-3 -8 2 -12 M102 64 q3 -8 -2 -12" stroke="#E8D5B5" stroke-width="3" stroke-linecap="round" fill="none"/>
+</svg>
